@@ -4,8 +4,24 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+The initial UML design for PawPal+ includes 6 classes organized around the core concept of generating a personalized daily care schedule for a pet.
+
+| Class | Responsibilities |
+|---|---|
+| **Owner** | Stores the owner's name, available time (in minutes), and scheduling preferences |
+| **Pet** | Represents the animal being cared for — holds its name, species, and a reference to its owner |
+| **Task** | Defines a single care activity with a title, duration, priority, category, and whether it's required |
+| **ScheduledTask** | Wraps a `Task` with a concrete start/end time and a reason for its placement in the schedule |
+| **DailyPlan** | Aggregates the full schedule for a pet — holds the list of scheduled and skipped tasks, total time used, and a summary |
+| **Scheduler** | The logic class — takes a pet and a list of tasks and produces a `DailyPlan` via `generate_plan()` |
+
+Key relationships:
+- An `Owner` owns one `Pet`
+- A `Task` becomes a `ScheduledTask` when placed in the plan
+- A `DailyPlan` contains many `ScheduledTask`s and tracks skipped `Task`s
+- The `Scheduler` uses the `Pet` (and its owner's constraints) to produce the `DailyPlan`
+
+The design separates data (Owner, Pet, Task) from scheduling logic (Scheduler) and output structure (ScheduledTask, DailyPlan), following a clean single-responsibility pattern.
 
 **b. Design changes**
 
