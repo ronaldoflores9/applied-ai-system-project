@@ -41,3 +41,14 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Smarter Scheduling
+
+The scheduler now includes smarter planning features to improve daily care plans:
+
+- Recurrence-aware planning (`daily`, `weekly`, `as_needed`) so only due tasks are considered.
+- Species-aware filtering so a pet only gets tasks that apply to that species.
+- Priority and requirement ranking with optional pinned times (`HH:MM`) for better ordering.
+- Budget-based allocation that schedules as many tasks as possible within available owner time.
+- Conflict detection utilities that flag overlapping scheduled tasks, including pre-schedule checks for pinned time hints.
+- Flexible task views that can filter by pet, completion status, and priority.

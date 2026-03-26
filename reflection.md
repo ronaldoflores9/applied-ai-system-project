@@ -50,8 +50,16 @@ Yes, the design evolved after reviewing AI feedback on the initial skeleton. The
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+**Tradeoff: Greedy allocation silently resolves same-pet time conflicts instead of rejecting them**
+
+The `_allocate` method processes tasks one at a time in sorted order (pinned times first, then required, then priority). When two tasks on the same pet share the same `scheduled_time` — say, both Mochi's "Morning walk" and "Vet appointment" are pinned to `08:00` — the allocator places the first task at `08:00` and then, because the wall clock has moved past `08:00`, simply starts the second task immediately after. No warning is raised inside the plan itself; the second task quietly loses its requested slot.
+
+This means the final `DailyPlan` always looks clean and conflict-free for a single pet, even when the owner's original intent was impossible to honor. The conflict only surfaces in `check_time_hint_conflicts`, which runs as a separate pre-schedule pass.
+
+**Why this is reasonable for this scenario:**
+A scheduling app aimed at busy pet owners should never refuse to produce a plan. Crashing or blocking on a time conflict would be worse than silently bumping a task forward — the owner still gets a usable schedule. The pre-schedule warning system provides the transparency without making the scheduler fragile. The tradeoff is that an owner who ignores the pre-schedule warnings won't realize a task missed its slot just by reading the final plan.
+
+A future improvement would be adding a `reason` value like `"requested 08:00 — moved to 08:30 due to conflict"` to the `ScheduledTask` entry so the override is visible in the plan itself.
 
 ---
 
