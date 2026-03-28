@@ -42,15 +42,19 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
-## Smarter Scheduling
+## Features
 
-The scheduler now supports smarter day planning with:
+PawPal+ includes a scheduling engine with practical planning algorithms designed for real pet-care routines:
 
-- Due-date aware recurrence handling (`daily`, `weekly`, `as_needed`)
-- Species filtering so each pet only receives relevant tasks
-- Priority + required-task ranking with optional pinned start times (`HH:MM`)
-- Time-budgeted allocation to fit as many tasks as possible
-- Lightweight conflict warnings (pre-schedule and post-schedule) that inform without crashing
+- Chronological sorting by time: tasks with pinned times (`HH:MM`) are ordered first, earliest to latest; flexible tasks are placed afterward.
+- Multi-factor task ranking: when building a plan, tasks are prioritized by pinned time, then required status, then priority level (`high`, `medium`, `low`).
+- Daily/weekly/as-needed recurrence: recurrence rules determine if a task is due today, and completing `daily`/`weekly` tasks automatically creates the next pending instance.
+- Species-aware task filtering: tasks can target one or more species, and each pet only receives tasks relevant to its species.
+- Time-budgeted greedy allocation: the scheduler fills the day in ranked order until the owner's available minutes are exhausted, then marks remaining tasks as skipped.
+- Task filtering for dashboards: users can filter by pet, completion status, and priority to quickly inspect workload.
+- Pre-schedule conflict warnings: pinned task-time overlaps are detected before plan generation to catch intent conflicts early.
+- Post-schedule conflict detection: overlapping scheduled windows are identified across one pet or multiple pets and surfaced as warnings.
+- Explainable plan output: each scheduled item includes a reason (for example, pinned time vs. normal allocation), plus per-pet summaries of scheduled/skipped tasks.
 
 ## Testing PawPal+
 

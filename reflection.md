@@ -65,13 +65,11 @@ The performance tradeoff is that conflict detection is still $O(n^2)$ in the num
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used artificial intelligence for various aspects of the project. Initially, I used it to brainstorm the UML design and determine the correct approach for its development. Additionally, I used it for debugging, refactoring, and implementing code, specifically when I had an idea of what the algorithm was supposed to do but wasn’t sure how to implement it. The prompts I found most useful were those that asked about the function of a particular concept or part of the code.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+One instance where I rejected the AI’s suggestions was during algorithm development and proposal: when I selected one and asked the AI to implement it, the algorithm didn’t meet the requirements I was looking for. I evaluated and verified these by comparing what I wanted to achieve with my code against what the AI was actually doing. Finally, what I did was suggest another algorithm and began comparing and testing it to see if it worked correctly.
 
 ---
 
@@ -79,13 +77,21 @@ The performance tradeoff is that conflict detection is still $O(n^2)$ in the num
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I tested the behaviors that most directly affect schedule quality and user trust:
+
+1. **Task lifecycle basics**: adding tasks to pets, marking tasks complete, and verifying status transitions.
+2. **Recurrence logic**: ensuring `daily` and `weekly` tasks create the next pending instance when completed, while `as_needed` tasks do not auto-recur.
+3. **Sorting correctness**: confirming tasks are ordered chronologically by pinned `HH:MM` time and that flexible tasks appear after pinned tasks.
+4. **Conflict detection**: validating overlap detection for same-pet and cross-pet schedules, while ensuring adjacent intervals are not falsely flagged.
+5. **Time-budget allocation**: checking zero-budget behavior, exact-fit schedules, and skipped-task behavior when time is exceeded.
+6. **Filtering behavior**: verifying task filtering by pet, status, and priority, including all-filters-off cases.
+7. **Error handling and edge cases**: invalid pet-task mappings, time boundaries (for example `00:00` and `23:59`), and larger mixed task sets.
+
+These tests were important because they allowed us to verify how the system performed under normal conditions and in edge cases. This also reduces the risk of regression during refactoring, ensures that conflict warnings are reliable, and confirms that the application behaves predictably when inputs are imperfect.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I am highly confident that my scheduler works correctly for the core behaviors in this project. The full test suite passes and covers recurrence, sorting, conflict detection, filtering, and budget allocation across normal and edge-case scenarios. I also verified that invalid task-to-pet operations fail safely, which improves reliability when data is inconsistent. If I had more time, I would add stress tests with many pets and hundreds of tasks to measure performance and ensure the UI remains responsive. I would also add stricter input-validation tests for malformed times and invalid dates submitted through the Streamlit interface. Finally, I would test long-term recurrence behavior over simulated weeks to confirm that due-date logic remains accurate over time.
 
 ---
 
@@ -93,12 +99,12 @@ The performance tradeoff is that conflict detection is still $O(n^2)$ in the num
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+The part of the project I’m most satisfied with is learning how to use UML. Not just because I learned how to use it on this project, but because I see it as a tool I can use for my future projects. In my opinion, using this tool, specifically Mermaid.js, makes developing class diagrams and flowcharts much more interesting, technical, and enjoyable.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+If I’d had more time, I would have redesigned the scheduling system so that it could generate schedules for multiple pets at once, rather than creating a schedule for each one individually. This would make the scheduling system much more comprehensive and user-friendly. As for the UI, I would have improved it and tweaked it a bit to better match the theme.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+An important lesson I learned about designing systems and working with AI on this project is that effective implementation requires a solid system design. This AI-supported design makes everything more efficient by establishing a clear structure and meeting the specific goals we set out to achieve. Using UML first before jumping straight into implementation helped me break the problem down into parts and gradually solve them while identifying clear and concise characteristics, rather than making assumptions and then having to make too many adjustments along the way. This process improved both the quality of my application and my confidence in the final system.
