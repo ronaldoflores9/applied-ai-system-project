@@ -46,15 +46,17 @@ pip install -r requirements.txt
 
 PawPal+ includes a scheduling engine with practical planning algorithms designed for real pet-care routines:
 
-- Chronological sorting by time: tasks with pinned times (`HH:MM`) are ordered first, earliest to latest; flexible tasks are placed afterward.
-- Multi-factor task ranking: when building a plan, tasks are prioritized by pinned time, then required status, then priority level (`high`, `medium`, `low`).
-- Daily/weekly/as-needed recurrence: recurrence rules determine if a task is due today, and completing `daily`/`weekly` tasks automatically creates the next pending instance.
-- Species-aware task filtering: tasks can target one or more species, and each pet only receives tasks relevant to its species.
-- Time-budgeted greedy allocation: the scheduler fills the day in ranked order until the owner's available minutes are exhausted, then marks remaining tasks as skipped.
-- Task filtering for dashboards: users can filter by pet, completion status, and priority to quickly inspect workload.
-- Pre-schedule conflict warnings: pinned task-time overlaps are detected before plan generation to catch intent conflicts early.
-- Post-schedule conflict detection: overlapping scheduled windows are identified across one pet or multiple pets and surfaced as warnings.
-- Explainable plan output: each scheduled item includes a reason (for example, pinned time vs. normal allocation), plus per-pet summaries of scheduled/skipped tasks.
+- **Chronological sorting by time** (`sort_by_time`): tasks with pinned times (`HH:MM`) are ordered earliest-first using lexicographic string comparison; flexible tasks receive the sentinel key `"99:99"` and sort to the end — O(n log n).
+- **Multi-factor task ranking** (`_sort_tasks`): the plan builder ranks tasks by a three-key tuple — pinned time → `is_required` flag → priority level (`high` / `medium` / `low`) — so critical, time-anchored work is always scheduled first.
+- **Greedy time-budgeted allocation** (`_allocate`): tasks are placed into the day in ranked order, advancing a running clock; each task is scheduled only if its duration fits within the owner's remaining minute budget; overflow tasks are recorded as skipped — O(n) single pass.
+- **Daily / weekly / as-needed recurrence** (`is_due_today`): date arithmetic determines whether each task is due today; `daily` tasks are always eligible, `weekly` tasks re-appear after >6 elapsed days, and `as_needed` tasks are eligible until completed.
+- **Auto-creation of next recurring instance** (`mark_task_complete`): completing a `daily` or `weekly` task automatically appends a fresh pending copy to the pet's task list, preserving all original properties and the `last_completed_date` needed for the 7-day boundary check.
+- **Species-aware task filtering** (`_filter_by_species`): tasks carry an optional species list; an empty list means "all species," so each pet only receives tasks that match its species — ensures cats don't get dog-specific tasks.
+- **Pre-schedule conflict detection** (`check_time_hint_conflicts`): before plan generation, pinned-time tasks are compared pairwise as time intervals; overlapping pairs are reported as `SAME-PET` or `CROSS-PET` warnings so intent conflicts are caught early.
+- **Post-schedule overlap detection** (`detect_conflicts` / `get_conflict_warnings`): after allocation, all scheduled windows are cross-checked with an O(n²) interval-overlap algorithm (`a_start < b_end and b_start < a_end`) and surfaced as human-readable warnings.
+- **Multi-criteria dashboard filtering** (`filter_tasks`): users can simultaneously filter by pet name, completion status, and priority in a single O(n) pass; all three dimensions are optional AND-combined.
+- **Multi-pet planning** (`generate_plans_for_owner`): generates an independent daily plan for every pet an owner has, each respecting the full time budget, then aggregates conflict detection across all plans.
+- **Explainable plan output**: every `ScheduledTask` records a human-readable `reason` string — e.g., `"pinned to 08:00"` vs. `"scheduled within available time"` — plus per-pet summaries of scheduled and skipped tasks.
 
 ## Testing PawPal+
 
@@ -64,13 +66,19 @@ PawPal+ includes a scheduling engine with practical planning algorithms designed
 python -m pytest tests/test_pawpal.py -v
 ```
 
-### 📸 Demo 
-![First App Image](image.png)
-![Second App Image](image-1.png)
-![Third App Image](image-2.png)
-![Fourth App Image](image-3.png)
-![Fifth App Image](image-4.png)
-![Sixth App Image](image-5.png)
+### 📸 Demo
+
+<a href="/course_images/ai110/image.png" target="_blank"><img src='/course_images/ai110/image.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="/course_images/ai110/image-1.png" target="_blank"><img src='/course_images/ai110/image-1.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="/course_images/ai110/image-2.png" target="_blank"><img src='/course_images/ai110/image-2.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="/course_images/ai110/image-3.png" target="_blank"><img src='/course_images/ai110/image-3.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="/course_images/ai110/image-4.png" target="_blank"><img src='/course_images/ai110/image-4.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+
+<a href="/course_images/ai110/image-5.png" target="_blank"><img src='/course_images/ai110/image-5.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
 
 ### Test Coverage
 
