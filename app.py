@@ -81,6 +81,8 @@ st.markdown(
 # ── Session state ──────────────────────────────────────────────────────────────
 if "owner" not in st.session_state:
     st.session_state.owner = None
+if "plans" not in st.session_state:
+    st.session_state.plans = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 1 — Owner setup
@@ -221,26 +223,63 @@ if st.session_state.owner:
             selected_pet.add_task(new_task)
             st.success(f"Task **{task_title}** added to {selected_pet.name}.")
 
-        # Pending task table for selected pet
-        pending = selected_pet.get_pending_tasks()
-        if pending:
-            st.markdown(f"##### Pending tasks — {_species_emoji(selected_pet.species)} {selected_pet.name}")
+        # ── Interactive task list ──────────────────────────────────────────
+        all_tasks = selected_pet.tasks  # show pending + completed
+        if all_tasks:
+            st.markdown(
+                f"##### Tasks — {_species_emoji(selected_pet.species)} {selected_pet.name}"
+            )
             scheduler = Scheduler()
-            sorted_pending = scheduler.sort_by_time(pending)
-            rows = []
-            for t in sorted_pending:
-                emoji = _task_emoji(t.title, t.category)
-                rows.append({
-                    "📌 Time":    t.scheduled_time or "Flexible",
-                    "Task":       f"{emoji} {t.title}",
-                    "Min":        t.duration_minutes,
-                    "Priority":   f"{'🔴' if t.priority.value=='high' else '🟡' if t.priority.value=='medium' else '🟢'} {t.priority.value.upper()}",
-                    "Required":   "⭐" if t.is_required else "—",
-                    "Frequency":  t.frequency,
-                })
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            sorted_tasks = scheduler.sort_by_time(
+                [t for t in all_tasks if not t.is_completed]
+            ) + [t for t in all_tasks if t.is_completed]
+
+            for idx, t in enumerate(sorted_tasks):
+                emoji  = _task_emoji(t.title, t.category)
+                pval   = t.priority.value
+                p_icon = "🔴" if pval == "high" else "🟡" if pval == "medium" else "🟢"
+                uid    = f"{id(selected_pet)}_{id(t)}"
+
+                if t.is_completed:
+                    # Completed — read-only muted row
+                    st.markdown(
+                        f'<div style="background:#111a27;border-left:4px solid #333;'
+                        f'border-radius:6px;padding:8px 14px;margin-bottom:4px;'
+                        f'color:#556;opacity:0.7;">'
+                        f"✅ <s>{emoji} {t.title}</s> &nbsp;"
+                        f'<small>{p_icon} {pval.upper()} | {t.duration_minutes} min</small>'
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    # Pending — editable row
+                    col_info, col_time, col_done = st.columns([4, 2, 1])
+                    with col_info:
+                        st.markdown(
+                            f'<div style="padding:6px 0;color:#e0e0ff;">'
+                            f"{p_icon} <strong>{emoji} {t.title}</strong>"
+                            f'<br/><small style="color:#8899bb;">'
+                            f"⏱️ {t.duration_minutes} min &nbsp;|&nbsp; 🔁 {t.frequency}"
+                            f"{'&nbsp;|&nbsp; ⭐ Required' if t.is_required else ''}</small>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                    with col_time:
+                        new_time = st.text_input(
+                            "Time (HH:MM)",
+                            value=t.scheduled_time,
+                            placeholder="e.g. 09:30",
+                            key=f"time_{uid}",
+                            label_visibility="collapsed",
+                        )
+                        t.scheduled_time = new_time.strip()
+                    with col_done:
+                        if st.button("✅", key=f"done_{uid}", help="Mark as done"):
+                            t.mark_complete()
+                            st.session_state.plans = None
+                            st.rerun()
         else:
-            st.info("No pending tasks for this pet yet.")
+            st.info("No tasks for this pet yet.")
 
     st.divider()
 
@@ -431,139 +470,142 @@ if st.session_state.owner:
             st.warning("Add at least one pet before generating a schedule.")
         else:
             scheduler = Scheduler()
-
-            # ── Pre-schedule conflict check ────────────────────────────────
             pre_warnings = scheduler.check_time_hint_conflicts(owner)
-            if pre_warnings:
-                st.error("⚠️ **Pre-Schedule Conflicts Detected** — some pinned times overlap:")
-                for w in pre_warnings:
-                    st.warning(w, icon="🚨")
-                st.info("Adjust the pinned times for the conflicting tasks before generating the final schedule.")
+            st.session_state.plans = scheduler.generate_plans_for_owner(
+                owner, start_time=start_time, today=today_str
+            )
+            st.session_state.pre_warnings = pre_warnings
 
-            # ── Generate ───────────────────────────────────────────────────
-            plans = scheduler.generate_plans_for_owner(owner, start_time=start_time, today=today_str)
+    # ── Results (persist across reruns via session_state) ──────────────────
+    if st.session_state.plans:
+        plans     = st.session_state.plans
+        scheduler = Scheduler()
 
-            # ── Time budget overview ───────────────────────────────────────
-            st.markdown("#### 📊 Time Budget Overview")
-            total_used = sum(plan.total_minutes for plan in plans)
-            budget     = owner.time_available_minutes
-            remaining  = budget - total_used
-            progress   = min(total_used / budget, 1.0) if budget > 0 else 0
+        # Pre-schedule warnings
+        for w in st.session_state.get("pre_warnings", []):
+            st.warning(w, icon="🚨")
 
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Available",  f"{budget} min")
-            m2.metric("Scheduled",  f"{total_used} min")
-            m3.metric("Remaining",  f"{remaining} min",
-                      delta=f"{remaining} {'in reserve' if remaining >= 0 else 'OVER BUDGET'}")
+        # Time budget
+        st.markdown("#### 📊 Time Budget Overview")
+        total_used = sum(plan.total_minutes for plan in plans)
+        budget     = owner.time_available_minutes
+        remaining  = budget - total_used
+        progress   = min(total_used / budget, 1.0) if budget > 0 else 0
 
-            st.progress(progress, text=f"{int(progress * 100)}% of daily budget used")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Available", f"{budget} min")
+        m2.metric("Scheduled", f"{total_used} min")
+        m3.metric("Remaining", f"{remaining} min",
+                  delta=f"{remaining} {'in reserve' if remaining >= 0 else 'OVER BUDGET'}")
+        st.progress(progress, text=f"{int(progress * 100)}% of daily budget used")
 
-            if total_used > budget:
-                st.error(f"⚠️ Over budget by {total_used - budget} min. Reduce tasks or increase available time.")
-            elif total_used > budget * 0.85:
-                st.warning(f"⚡ High utilization ({int(progress*100)}%). Little buffer for surprises.")
-            else:
-                st.success(f"✓ Schedule fits within budget with {remaining} min to spare.")
+        if total_used > budget:
+            st.error(f"⚠️ Over budget by {total_used - budget} min.")
+        elif total_used > budget * 0.85:
+            st.warning(f"⚡ High utilization ({int(progress*100)}%). Little buffer for surprises.")
+        else:
+            st.success(f"✓ Schedule fits within budget with {remaining} min to spare.")
 
-            # ── Conflict detection ─────────────────────────────────────────
-            conflicts = scheduler.detect_conflicts(plans)
-            if conflicts:
-                st.error(f"🚨 **{len(conflicts)} Scheduling Conflict(s) Found**")
-                for i, (st_a, pet_a, st_b, pet_b) in enumerate(conflicts, 1):
-                    with st.container(border=True):
-                        ca, cb = st.columns(2)
-                        with ca:
-                            st.markdown(
-                                f"**Conflict #{i}**<br/>"
-                                f"🐾 **{pet_a.name}**<br/>"
-                                f"{_task_emoji(st_a.task.title)} {st_a.task.title}<br/>"
-                                f"⏰ {st_a.start_time} – {st_a.end_time}",
-                                unsafe_allow_html=True,
-                            )
-                        with cb:
-                            st.markdown(
-                                f"↔️ **OVERLAPS WITH**<br/>"
-                                f"🐾 **{pet_b.name}**<br/>"
-                                f"{_task_emoji(st_b.task.title)} {st_b.task.title}<br/>"
-                                f"⏰ {st_b.start_time} – {st_b.end_time}",
-                                unsafe_allow_html=True,
-                            )
-                st.info("💡 Resolve by moving one task to a different time or marking it as_needed.")
+        # Conflict detection
+        conflicts = scheduler.detect_conflicts(plans)
+        if conflicts:
+            st.error(f"🚨 **{len(conflicts)} Scheduling Conflict(s) Found**")
+            for i, (st_a, pet_a, st_b, pet_b) in enumerate(conflicts, 1):
+                with st.container(border=True):
+                    ca, cb = st.columns(2)
+                    with ca:
+                        st.markdown(
+                            f"**Conflict #{i}**<br/>"
+                            f"🐾 **{pet_a.name}**<br/>"
+                            f"{_task_emoji(st_a.task.title)} {st_a.task.title}<br/>"
+                            f"⏰ {st_a.start_time} – {st_a.end_time}",
+                            unsafe_allow_html=True,
+                        )
+                    with cb:
+                        st.markdown(
+                            f"↔️ **OVERLAPS WITH**<br/>"
+                            f"🐾 **{pet_b.name}**<br/>"
+                            f"{_task_emoji(st_b.task.title)} {st_b.task.title}<br/>"
+                            f"⏰ {st_b.start_time} – {st_b.end_time}",
+                            unsafe_allow_html=True,
+                        )
 
-                if st.button("🔧 Auto-Resolve Conflicts", use_container_width=True):
-                    changes = scheduler.resolve_conflicts(owner)
-                    if changes:
-                        st.success(f"✓ Resolved {len(changes)} conflict(s) by shifting tasks forward:")
-                        for task, old_t, new_t in changes:
-                            emoji = _task_emoji(task.title, task.category)
-                            st.markdown(
-                                f'<div style="background:#1a2035;border-left:4px solid #f0a500;'
-                                f'border-radius:6px;padding:8px 14px;margin-bottom:4px;color:#e0e0ff;">'
-                                f"{emoji} <strong>{task.title}</strong>"
-                                f'&nbsp; <span style="color:#ff4b4b;text-decoration:line-through;">'
-                                f"{old_t}</span>"
-                                f' → <span style="color:#21c354;">{new_t}</span></div>',
-                                unsafe_allow_html=True,
-                            )
-                        st.info("⚡ Click **Generate Schedule** again to rebuild the plan with the updated times.")
-                    else:
-                        st.info("No pinned-time conflicts to resolve.")
-            else:
-                st.success("✓ No scheduling conflicts detected!")
+            # Auto-resolve button — lives OUTSIDE generate block so it survives reruns
+            if st.button("🔧 Auto-Resolve Conflicts", use_container_width=True):
+                changes = scheduler.resolve_conflicts(owner)
+                if changes:
+                    for task, old_t, new_t in changes:
+                        emoji = _task_emoji(task.title, task.category)
+                        st.markdown(
+                            f'<div style="background:#1a2035;border-left:4px solid #f0a500;'
+                            f'border-radius:6px;padding:8px 14px;margin-bottom:4px;color:#e0e0ff;">'
+                            f"{emoji} <strong>{task.title}</strong>"
+                            f'&nbsp;<span style="color:#ff4b4b;text-decoration:line-through;">{old_t}</span>'
+                            f'&nbsp;→&nbsp;<span style="color:#21c354;">{new_t}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                    # Rebuild plan immediately with the fixed times
+                    st.session_state.plans = Scheduler().generate_plans_for_owner(
+                        owner, start_time=start_time, today=today_str
+                    )
+                    st.success(f"✓ Resolved {len(changes)} conflict(s). Schedule rebuilt.")
+                    st.rerun()
+                else:
+                    st.info("No pinned-time conflicts to resolve.")
+        else:
+            st.success("✓ No scheduling conflicts detected!")
 
-            # ── Per-pet plans ──────────────────────────────────────────────
-            st.markdown("#### 📋 Daily Plans")
-            for plan in plans:
-                pet_emoji = _species_emoji(plan.pet.species)
-                with st.expander(
-                    f"{pet_emoji} {plan.pet.name}'s Schedule — {plan.total_minutes} min scheduled",
-                    expanded=True,
-                ):
-                    pm1, pm2, pm3 = st.columns(3)
-                    pm1.metric("Scheduled", len(plan.scheduled_tasks))
-                    pm2.metric("Skipped",   len(plan.skipped_tasks))
-                    pm3.metric("Duration",  f"{plan.total_minutes} min")
+        # Per-pet plans
+        st.markdown("#### 📋 Daily Plans")
+        for plan in plans:
+            pet_emoji = _species_emoji(plan.pet.species)
+            with st.expander(
+                f"{pet_emoji} {plan.pet.name}'s Schedule — {plan.total_minutes} min scheduled",
+                expanded=True,
+            ):
+                pm1, pm2, pm3 = st.columns(3)
+                pm1.metric("Scheduled", len(plan.scheduled_tasks))
+                pm2.metric("Skipped",   len(plan.skipped_tasks))
+                pm3.metric("Duration",  f"{plan.total_minutes} min")
 
-                    if plan.scheduled_tasks:
-                        st.markdown("**✅ Scheduled Tasks**")
-                        sched_rows = []
-                        for sched in plan.scheduled_tasks:
-                            t     = sched.task
-                            emoji = _task_emoji(t.title, t.category)
-                            pval  = t.priority.value
-                            sched_rows.append({
-                                "⏰ Time":    f"{sched.start_time} – {sched.end_time}",
-                                "Task":       f"{emoji} {t.title}",
-                                "Min":        t.duration_minutes,
-                                "Priority":   f"{'🔴' if pval=='high' else '🟡' if pval=='medium' else '🟢'} {pval.upper()}",
-                                "Frequency":  t.frequency,
-                                "Required":   "⭐" if t.is_required else "—",
-                                "Reason":     sched.reason,
-                            })
-                        st.dataframe(sched_rows, use_container_width=True, hide_index=True)
-                    else:
-                        st.info("No tasks were scheduled for this pet today.")
+                if plan.scheduled_tasks:
+                    st.markdown("**✅ Scheduled Tasks**")
+                    sched_rows = []
+                    for sched in plan.scheduled_tasks:
+                        t    = sched.task
+                        pval = t.priority.value
+                        sched_rows.append({
+                            "⏰ Time":   f"{sched.start_time} – {sched.end_time}",
+                            "Task":      f"{_task_emoji(t.title, t.category)} {t.title}",
+                            "Min":       t.duration_minutes,
+                            "Priority":  f"{'🔴' if pval=='high' else '🟡' if pval=='medium' else '🟢'} {pval.upper()}",
+                            "Frequency": t.frequency,
+                            "Required":  "⭐" if t.is_required else "—",
+                            "Reason":    sched.reason,
+                        })
+                    st.dataframe(sched_rows, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No tasks were scheduled for this pet today.")
 
-                    if plan.skipped_tasks:
-                        st.markdown("**⏭️ Skipped Tasks**")
-                        skip_rows = []
-                        for t in plan.skipped_tasks:
-                            emoji = _task_emoji(t.title, t.category)
-                            pval  = t.priority.value
-                            if t.frequency == "weekly" and t.last_completed_date:
-                                days_ago = (date.today() - date.fromisoformat(t.last_completed_date)).days
-                                why = f"Weekly — completed {days_ago}d ago (due in {7 - days_ago}d)"
-                            elif t.frequency == "daily" and t.is_completed:
-                                why = "Daily — already completed today"
-                            else:
-                                why = "Over time budget"
-                            skip_rows.append({
-                                "Task":      f"{emoji} {t.title}",
-                                "Min":       t.duration_minutes,
-                                "Priority":  f"{'🔴' if pval=='high' else '🟡' if pval=='medium' else '🟢'} {pval.upper()}",
-                                "Why Skipped": why,
-                            })
-                        st.dataframe(skip_rows, use_container_width=True, hide_index=True)
+                if plan.skipped_tasks:
+                    st.markdown("**⏭️ Skipped Tasks**")
+                    skip_rows = []
+                    for t in plan.skipped_tasks:
+                        pval = t.priority.value
+                        if t.frequency == "weekly" and t.last_completed_date:
+                            days_ago = (date.today() - date.fromisoformat(t.last_completed_date)).days
+                            why = f"Weekly — completed {days_ago}d ago (due in {7 - days_ago}d)"
+                        elif t.frequency == "daily" and t.is_completed:
+                            why = "Daily — already completed today"
+                        else:
+                            why = "Over time budget"
+                        skip_rows.append({
+                            "Task":        f"{_task_emoji(t.title, t.category)} {t.title}",
+                            "Min":         t.duration_minutes,
+                            "Priority":    f"{'🔴' if pval=='high' else '🟡' if pval=='medium' else '🟢'} {pval.upper()}",
+                            "Why Skipped": why,
+                        })
+                    st.dataframe(skip_rows, use_container_width=True, hide_index=True)
 
 else:
     st.markdown(
