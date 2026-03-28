@@ -64,6 +64,14 @@ PawPal+ includes a scheduling engine with practical planning algorithms designed
 python -m pytest tests/test_pawpal.py -v
 ```
 
+### 📸 Demo 
+![First App Image](image.png)
+![Second App Image](image-1.png)
+![Third App Image](image-2.png)
+![Fourth App Image](image-3.png)
+![Fifth App Image](image-4.png)
+![Sixth App Image](image-5.png)
+
 ### Test Coverage
 
 The test suite includes **25 comprehensive tests** covering critical functionality and edge cases:
