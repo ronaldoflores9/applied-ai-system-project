@@ -47,6 +47,7 @@ pip install -r requirements.txt
 PawPal+ includes a scheduling engine with practical planning algorithms designed for real pet-care routines:
 
 - **Chronological sorting by time** (`sort_by_time`): tasks with pinned times (`HH:MM`) are ordered earliest-first using lexicographic string comparison; flexible tasks receive the sentinel key `"99:99"` and sort to the end — O(n log n).
+- **Priority-first scheduling** (`sort_by_priority_then_time`): sorts tasks High → Medium → Low and then chronologically within each priority tier, ensuring the most critical work is always attempted before lower-importance tasks regardless of clock time; visualised in the app's dedicated **🔴 Priority View** tab with color-coded cards (red / yellow / green borders and badges).
 - **Multi-factor task ranking** (`_sort_tasks`): the plan builder ranks tasks by a three-key tuple — pinned time → `is_required` flag → priority level (`high` / `medium` / `low`) — so critical, time-anchored work is always scheduled first.
 - **Greedy time-budgeted allocation** (`_allocate`): tasks are placed into the day in ranked order, advancing a running clock; each task is scheduled only if its duration fits within the owner's remaining minute budget; overflow tasks are recorded as skipped — O(n) single pass.
 - **Daily / weekly / as-needed recurrence** (`is_due_today`): date arithmetic determines whether each task is due today; `daily` tasks are always eligible, `weekly` tasks re-appear after >6 elapsed days, and `as_needed` tasks are eligible until completed.
@@ -57,6 +58,38 @@ PawPal+ includes a scheduling engine with practical planning algorithms designed
 - **Multi-criteria dashboard filtering** (`filter_tasks`): users can simultaneously filter by pet name, completion status, and priority in a single O(n) pass; all three dimensions are optional AND-combined.
 - **Multi-pet planning** (`generate_plans_for_owner`): generates an independent daily plan for every pet an owner has, each respecting the full time budget, then aggregates conflict detection across all plans.
 - **Explainable plan output**: every `ScheduledTask` records a human-readable `reason` string — e.g., `"pinned to 08:00"` vs. `"scheduled within available time"` — plus per-pet summaries of scheduled and skipped tasks.
+- **Weighted urgency scoring & smart recommendation** (`score_task` / `recommend_next`) *Advanced*: answers "I have N free minutes — what should I do next?" by computing a composite float score for every pending task across all pets and returning the best fit for the available window. The score is a weighted sum of four signals: priority level (LOW=1, MEDIUM=2, HIGH=3), a required-task multiplier (×2), a linear recency penalty for weekly tasks (0.0 on completion day → 1.0 at day 7), and an overdue bonus (+2.0 when a weekly task exceeds 7 days). Ties are broken by shortest duration so the owner can finish something quickly.
+
+## 🤖 Agent Mode — How It Was Used
+
+**Challenge 1: Weighted Urgency Scoring via Agent Mode**
+
+The `score_task` and `recommend_next` methods were designed and implemented with Claude Code running in **Agent Mode** (multi-step autonomous reasoning). Here is how the session unfolded:
+
+### Prompts given to Agent Mode
+
+1. **Codebase exploration prompt** — Agent Mode was instructed to read every file in the project and produce a full inventory of algorithms, data models, function signatures, and time complexities before suggesting any new feature. This prevented designing something already covered by the existing greedy allocator.
+
+2. **Algorithm design prompt** — With full codebase context, Agent Mode was asked: *"Propose a third algorithmic capability beyond sorting and conflict detection. It must integrate with existing data models, use at least two independent scoring signals, and be testable in isolation."* It returned three candidates (next-available-slot, weighted scoring, care-gap heat map) with trade-off analysis.
+
+3. **Implementation prompt** — After selecting weighted urgency scoring, Agent Mode was given the exact insertion point in `pawpal_system.py` and asked to write both `score_task` and `recommend_next` with full docstrings, type annotations, and edge-case handling (empty owner, no eligible tasks, future-pinned tasks excluded).
+
+4. **Verification prompt** — Agent Mode was asked to trace through a concrete example (HIGH-priority required weekly task not done in 8 days vs. LOW-priority daily task) and confirm the scores satisfy `overdue_weekly > daily_low` before the code was accepted.
+
+### What Agent Mode contributed
+
+| Step | What a human would do alone | What Agent Mode did |
+|------|-----------------------------|----------------------|
+| Discovery | Manually read ~430 lines of code | Autonomously mapped all classes, methods, and data flow in one pass |
+| Design | Brainstorm one idea | Generated three candidate algorithms with complexity and integration analysis |
+| Implementation | Write code, then iterate on edge cases | Produced the full implementation with four scoring signals and tie-breaking in a single step |
+| Verification | Run tests and debug | Traced a numerical example through the formula before any code ran |
+
+### Key design decisions driven by Agent Mode
+
+- **Four-signal formula** (`priority × required_mult + recency_penalty + overdue_bonus`) — Agent Mode identified that a single priority field was insufficient because a LOW-priority task overdue by 10 days should outrank a MEDIUM task completed this morning.
+- **Linear recency ramp for weekly tasks** — Instead of a binary "due / not due" flag, Agent Mode proposed `min(days_elapsed / 7.0, 1.0)` so urgency increases continuously as the 7-day window approaches.
+- **Excluding future-pinned tasks** — Agent Mode noticed that pinned tasks already have a reserved slot in the full schedule; recommending them for a free window would double-book the owner's time.
 
 ## Testing PawPal+
 

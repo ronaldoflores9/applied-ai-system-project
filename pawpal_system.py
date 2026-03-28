@@ -173,6 +173,32 @@ class Scheduler:
         pet.add_task(next_task)
         return next_task
 
+    def sort_by_priority_then_time(self, tasks: list[Task]) -> list[Task]:
+        """Order tasks by priority first (High → Medium → Low), then by time.
+
+        Within each priority tier, tasks with a pinned scheduled_time are
+        ordered chronologically (lexicographic "HH:MM" comparison); flexible
+        tasks sort to the end of their tier using the sentinel "99:99".
+
+        This produces a plan that always completes the most important work
+        first, regardless of when it was originally scheduled.
+
+        Example ordering for a mixed list:
+            🔴 HIGH  / "08:00"  → first
+            🔴 HIGH  / "09:30"  → second
+            🔴 HIGH  / flexible → third
+            🟡 MEDIUM / "07:00" → fourth (high priority beats earlier time)
+            🟢 LOW   / flexible → last
+        """
+        priority_order = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
+        return sorted(
+            tasks,
+            key=lambda t: (
+                priority_order.get(t.priority, 99),
+                t.scheduled_time if t.scheduled_time else "99:99",
+            ),
+        )
+
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
         """Order tasks by their explicit time hints.
 
@@ -300,6 +326,52 @@ class Scheduler:
             )
         return warnings
 
+    def resolve_conflicts(
+        self, owner: Owner
+    ) -> list[tuple[Task, str, str]]:
+        """Auto-resolve pinned-time conflicts by shifting the later task forward.
+
+        Algorithm (sweep-line):
+        1. Collect every incomplete pinned task across all pets, sorted by
+           their scheduled_time (earliest first).
+        2. Walk through them tracking `wall` — the earliest minute that is
+           free (initially 0, i.e. midnight).
+        3. If a task's pinned start overlaps the current wall time, push its
+           `scheduled_time` forward to `wall` (the next free slot).
+        4. Advance `wall` to the end of the task in either case.
+
+        This guarantees a chain of non-overlapping pinned times while
+        minimising how much each task is shifted.
+
+        Args:
+            owner: Owner whose pets' pinned tasks will be adjusted in-place.
+
+        Returns:
+            A list of (task, old_time, new_time) triples for every task whose
+            scheduled_time was changed, so the UI can display a diff.
+        """
+        pinned: list[tuple[Pet, Task]] = [
+            (pet, task)
+            for pet in owner.pets
+            for task in pet.tasks
+            if task.scheduled_time and not task.is_completed
+        ]
+        pinned.sort(key=lambda pt: self._parse_time(pt[1].scheduled_time))
+
+        changes: list[tuple[Task, str, str]] = []
+        wall = 0  # minutes since midnight — tracks the next free slot
+
+        for _, task in pinned:
+            start = self._parse_time(task.scheduled_time)
+            if start < wall:
+                old_time = task.scheduled_time
+                task.scheduled_time = self._format_time(wall)
+                changes.append((task, old_time, task.scheduled_time))
+                start = wall
+            wall = start + task.duration_minutes
+
+        return changes
+
     def check_time_hint_conflicts(self, owner: Owner) -> list[str]:
         """Check pinned task time hints for overlaps before allocation.
 
@@ -341,6 +413,101 @@ class Scheduler:
                         f"({self._format_time(b_start)}–{self._format_time(b_end)})"
                     )
         return warnings
+
+    # ------------------------------------------------------------------
+    # Weighted urgency scoring & smart recommendation
+    # ------------------------------------------------------------------
+
+    def score_task(self, task: Task, today: str | None = None) -> float:
+        """Compute a composite urgency score for a single task.
+
+        The score is a weighted sum of four independent signals:
+
+        1. **Priority weight** (1–3): LOW=1, MEDIUM=2, HIGH=3.
+        2. **Required multiplier** (×2 if is_required, ×1 otherwise):
+           Required tasks are double-weighted because skipping them is not
+           an option.
+        3. **Recency penalty** (0.0–1.0): For *weekly* tasks the penalty
+           grows linearly from 0 on the day of completion to 1.0 on day 7+,
+           rewarding tasks that are almost overdue. Daily and as_needed tasks
+           receive a flat recency contribution of 0.5.
+        4. **Overdue bonus** (+2.0): Applied when a weekly task has not been
+           completed in more than 7 days to ensure overdue items surface at
+           the top regardless of priority.
+
+        Final formula:
+            score = (priority_weight * required_mult) + recency_penalty + overdue_bonus
+
+        Returns a non-negative float; higher means more urgent.
+        """
+        if today is None:
+            today = date.today().isoformat()
+
+        priority_weight = {Priority.LOW: 1, Priority.MEDIUM: 2, Priority.HIGH: 3}.get(task.priority, 1)
+        required_mult = 2.0 if task.is_required else 1.0
+
+        recency_penalty = 0.5  # default for daily / as_needed
+        overdue_bonus = 0.0
+
+        if task.frequency == "weekly":
+            if not task.last_completed_date:
+                recency_penalty = 1.0
+            else:
+                days_elapsed = (date.fromisoformat(today) - date.fromisoformat(task.last_completed_date)).days
+                recency_penalty = min(days_elapsed / 7.0, 1.0)
+                if days_elapsed > 7:
+                    overdue_bonus = 2.0
+
+        return (priority_weight * required_mult) + recency_penalty + overdue_bonus
+
+    def recommend_next(
+        self,
+        owner: Owner,
+        available_minutes: int,
+        current_time: str = "08:00",
+        today: str | None = None,
+    ) -> tuple[Pet, Task, float] | None:
+        """Return the single most urgent pending task that fits a free window.
+
+        This answers the question: *"I have N free minutes right now — what
+        should I do next?"*  It is useful when the owner has an unplanned gap
+        and wants an instant recommendation without regenerating the full plan.
+
+        Algorithm:
+        1. Collect every pending, due task across all pets (species-filtered).
+        2. Exclude tasks already pinned to a future time (they belong to the
+           fixed schedule, not the free window).
+        3. Score each candidate with :meth:`score_task`.
+        4. Among tasks whose ``duration_minutes ≤ available_minutes``, return
+           the (pet, task, score) triple with the highest score.
+           Ties are broken by shorter duration (prefer finishing something
+           quickly when urgency is equal).
+
+        Returns ``None`` when no eligible task fits the available window.
+        """
+        if today is None:
+            today = date.today().isoformat()
+
+        current_minutes = self._parse_time(current_time)
+
+        candidates: list[tuple[Pet, Task, float]] = []
+        for pet in owner.pets:
+            due_tasks = [t for t in pet.get_pending_tasks() if is_due_today(t, today)]
+            species_tasks = self._filter_by_species(due_tasks, pet.species)
+            for task in species_tasks:
+                # Skip tasks that are pinned to a future time slot
+                if task.scheduled_time:
+                    pinned = self._parse_time(task.scheduled_time)
+                    if pinned > current_minutes:
+                        continue
+                if task.duration_minutes <= available_minutes:
+                    candidates.append((pet, task, self.score_task(task, today)))
+
+        if not candidates:
+            return None
+
+        # Highest score wins; ties broken by shortest duration
+        return max(candidates, key=lambda x: (x[2], -x[1].duration_minutes))
 
     # ------------------------------------------------------------------
     # Private helpers
