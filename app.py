@@ -1,7 +1,23 @@
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
 import streamlit as st
 from datetime import date
 
 from pawpal_system import Owner, Pet, Task, Priority, Scheduler
+from logger_config import (
+    setup_logging,
+    GuardrailError,
+    validate_task_title,
+    validate_task_duration,
+    validate_time_hint,
+    validate_chat_message,
+)
+
+# ── Logging — initialised once per process ──────────────────────────────────
+_app_logger = setup_logging()
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
@@ -83,6 +99,8 @@ if "owner" not in st.session_state:
     st.session_state.owner = None
 if "plans" not in st.session_state:
     st.session_state.plans = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []   # plain {"role", "content"} dicts for display + API
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SECTION 1 — Owner setup
@@ -212,16 +230,26 @@ if st.session_state.owner:
             scheduled_time = st.text_input("Pinned time (HH:MM, optional)", value="")
 
         if st.button("➕ Add Task", use_container_width=True):
-            new_task = Task(
-                title=task_title,
-                duration_minutes=int(duration),
-                priority=Priority(priority_str),
-                is_required=is_required,
-                frequency=frequency,
-                scheduled_time=scheduled_time.strip(),
-            )
-            selected_pet.add_task(new_task)
-            st.success(f"Task **{task_title}** added to {selected_pet.name}.")
+            try:
+                safe_title    = validate_task_title(task_title)
+                safe_duration = validate_task_duration(int(duration))
+                safe_time     = validate_time_hint(scheduled_time)
+                new_task = Task(
+                    title=safe_title,
+                    duration_minutes=safe_duration,
+                    priority=Priority(priority_str),
+                    is_required=is_required,
+                    frequency=frequency,
+                    scheduled_time=safe_time,
+                )
+                selected_pet.add_task(new_task)
+                _app_logger.info(
+                    "Task '%s' added to pet '%s' (priority=%s, duration=%d min)",
+                    safe_title, selected_pet.name, priority_str, safe_duration,
+                )
+                st.success(f"Task **{safe_title}** added to {selected_pet.name}.")
+            except GuardrailError as exc:
+                st.error(f"⚠️ {exc}")
 
         # ── Interactive task list ──────────────────────────────────────────
         all_tasks = selected_pet.tasks  # show pending + completed
@@ -606,6 +634,94 @@ if st.session_state.owner:
                             "Why Skipped": why,
                         })
                     st.dataframe(skip_rows, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SECTION 7 — AI Assistant (Agentic Workflow)
+    # ══════════════════════════════════════════════════════════════════════════
+    st.subheader("🤖 AI Assistant")
+    st.caption(
+        "Ask in plain English — the assistant autonomously calls scheduling tools "
+        "and synthesizes a complete answer."
+    )
+
+    # ── API key check ──────────────────────────────────────────────────────
+    api_key_present = bool(os.environ.get("GEMINI_API_KEY"))
+    if not api_key_present:
+        st.warning(
+            "**GEMINI_API_KEY not set.** "
+            "Export it in your terminal before launching the app:\n\n"
+            "```\nexport GEMINI_API_KEY='AIza...'\nstreamlit run app.py\n```",
+            icon="🔑",
+        )
+    else:
+        # ── Chat history display ───────────────────────────────────────────
+        if st.session_state.chat_history:
+            for turn in st.session_state.chat_history:
+                role    = turn["role"]
+                content = turn["content"]
+                if role == "user":
+                    with st.chat_message("user"):
+                        st.markdown(content)
+                else:
+                    with st.chat_message("assistant", avatar="🐾"):
+                        st.markdown(content)
+
+        # ── Chat input ────────────────────────────────────────────────────
+        user_input = st.chat_input(
+            "e.g. 'Generate today's schedule and check for conflicts'",
+            disabled=not owner.pets,
+        )
+
+        if not owner.pets:
+            st.info("Add at least one pet and some tasks before chatting with the assistant.")
+
+        if user_input and owner.pets:
+            # Guardrail: validate message before sending
+            try:
+                safe_input = validate_chat_message(user_input)
+            except GuardrailError as exc:
+                st.error(f"⚠️ {exc}")
+                safe_input = None
+
+            if safe_input:
+                # Show the user's message immediately
+                with st.chat_message("user"):
+                    st.markdown(safe_input)
+
+                # Run the agentic loop
+                with st.chat_message("assistant", avatar="🐾"):
+                    with st.spinner("Thinking…"):
+                        try:
+                            from ai_assistant import PawPalAIAssistant
+                            scheduler = Scheduler()
+                            assistant = PawPalAIAssistant(owner=owner, scheduler=scheduler)
+                            response_text, updated_history = assistant.process_message(
+                                safe_input,
+                                st.session_state.chat_history,
+                            )
+                            st.session_state.chat_history = updated_history
+                            _app_logger.info(
+                                "AI assistant responded (len=%d chars)", len(response_text)
+                            )
+                        except EnvironmentError as exc:
+                            response_text = f"Configuration error: {exc}"
+                            _app_logger.error("AI assistant config error: %s", exc)
+                        except Exception as exc:
+                            response_text = (
+                                "An unexpected error occurred. Please try again.\n\n"
+                                f"Details: {exc}"
+                            )
+                            _app_logger.error("AI assistant error: %s", exc, exc_info=True)
+
+                    st.markdown(response_text)
+
+        # ── Clear chat button ──────────────────────────────────────────────
+        if st.session_state.chat_history:
+            if st.button("🗑️ Clear chat history", use_container_width=False):
+                st.session_state.chat_history = []
+                st.rerun()
 
 else:
     st.markdown(

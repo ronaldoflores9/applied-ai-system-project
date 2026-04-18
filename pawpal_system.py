@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum
+
+logger = logging.getLogger("pawpal.scheduler")
 
 
 class Priority(str, Enum):
@@ -123,6 +126,7 @@ class Scheduler:
     def generate_plan(self, pet: Pet, tasks: list[Task], start_time: str = "08:00",
                       today: str | None = None) -> DailyPlan:
         """Build and return a DailyPlan for a pet from the given task list."""
+        logger.info("Generating plan for '%s' (%s tasks)", pet.name, len(tasks))
         due = [t for t in tasks if is_due_today(t, today)]
         filtered = self._filter_by_species(due, pet.species)
         sorted_tasks = self._sort_tasks(filtered)
@@ -130,6 +134,10 @@ class Scheduler:
         plan = DailyPlan(pet=pet, scheduled_tasks=scheduled, skipped_tasks=skipped)
         plan.total_minutes = sum(st.task.duration_minutes for st in scheduled)
         plan.summary = self._build_summary(plan)
+        logger.info(
+            "Plan for '%s': %d scheduled, %d skipped, %d min total",
+            pet.name, len(scheduled), len(skipped), plan.total_minutes,
+        )
         return plan
 
     def generate_plans_for_owner(self, owner: Owner, start_time: str = "08:00",
@@ -154,6 +162,7 @@ class Scheduler:
             return None
 
         task.mark_complete()
+        logger.info("Task '%s' marked complete for pet '%s'", task.title, pet.name)
 
         if task.frequency not in {"daily", "weekly"}:
             return None
@@ -299,6 +308,7 @@ class Scheduler:
                 b_end   = self._parse_time(st_b.end_time)
                 if a_start < b_end and b_start < a_end:
                     conflicts.append((st_a, pet_a, st_b, pet_b))
+        logger.info("Conflict detection complete: %d conflict(s) found", len(conflicts))
         return conflicts
 
     def get_conflict_warnings(self, plans: list[DailyPlan]) -> list[str]:
@@ -504,10 +514,15 @@ class Scheduler:
                     candidates.append((pet, task, self.score_task(task, today)))
 
         if not candidates:
+            logger.info("recommend_next: no eligible tasks found for %d min window", available_minutes)
             return None
 
-        # Highest score wins; ties broken by shortest duration
-        return max(candidates, key=lambda x: (x[2], -x[1].duration_minutes))
+        best = max(candidates, key=lambda x: (x[2], -x[1].duration_minutes))
+        logger.info(
+            "recommend_next: '%s' (pet=%s, score=%.2f) for %d-min window",
+            best[1].title, best[0].name, best[2], available_minutes,
+        )
+        return best
 
     # ------------------------------------------------------------------
     # Private helpers
