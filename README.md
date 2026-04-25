@@ -10,6 +10,14 @@
 
 ---
 
+## Portfolio Artifact
+
+[View the code on GitHub](https://github.com/ronaldoflores9/applied-ai-system-project)
+
+This project shows that I can design and build an AI system that is both useful and explainable. I focus on clear architecture, reliable scheduling logic, and practical guardrails, which means I think beyond just making an AI feature work and toward making it dependable, testable, and easy to understand.
+
+---
+
 ## Original Project (Modules 1–3)
 
 **PawPal+** began as a structured pet-care scheduling tool designed to help busy pet owners stay consistent with daily care routines. The original goals were to track tasks like walks, feeding, medications, and grooming across multiple pets; apply time-budget constraints and priority rankings to generate a daily plan; and explain _why_ each task was included or skipped. The system was designed around six core classes (`Owner`, `Pet`, `Task`, `ScheduledTask`, `DailyPlan`, `Scheduler`) following a clean separation between data models and scheduling logic.
