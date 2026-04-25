@@ -4,9 +4,15 @@
 
 ---
 
+## Loom Video
+
+[Watch the Loom video](https://www.loom.com/share/b2d8a87ff1a1436ab0d5a315e62eee7b)
+
+---
+
 ## Original Project (Modules 1–3)
 
-**PawPal+** began as a structured pet-care scheduling tool designed to help busy pet owners stay consistent with daily care routines. The original goals were to track tasks like walks, feeding, medications, and grooming across multiple pets; apply time-budget constraints and priority rankings to generate a daily plan; and explain *why* each task was included or skipped. The system was designed around six core classes (`Owner`, `Pet`, `Task`, `ScheduledTask`, `DailyPlan`, `Scheduler`) following a clean separation between data models and scheduling logic.
+**PawPal+** began as a structured pet-care scheduling tool designed to help busy pet owners stay consistent with daily care routines. The original goals were to track tasks like walks, feeding, medications, and grooming across multiple pets; apply time-budget constraints and priority rankings to generate a daily plan; and explain _why_ each task was included or skipped. The system was designed around six core classes (`Owner`, `Pet`, `Task`, `ScheduledTask`, `DailyPlan`, `Scheduler`) following a clean separation between data models and scheduling logic.
 
 ---
 
@@ -14,7 +20,7 @@
 
 **PawPal+** is an intelligent pet-care scheduling assistant that takes owner constraints (available daily minutes), pet profiles, and a task list, then produces an optimized day plan — complete with conflict warnings, recurrence tracking, and a smart "what should I do next?" recommendation engine.
 
-**Why it matters:** Pet care is easy to neglect under a busy schedule. PawPal+ makes it frictionless by automatically prioritizing tasks, flagging scheduling conflicts, and letting owners ask plain-English questions like *"What's the most urgent thing I can do in the next 20 minutes?"* — and get a data-backed answer instantly.
+**Why it matters:** Pet care is easy to neglect under a busy schedule. PawPal+ makes it frictionless by automatically prioritizing tasks, flagging scheduling conflicts, and letting owners ask plain-English questions like _"What's the most urgent thing I can do in the next 20 minutes?"_ — and get a data-backed answer instantly.
 
 ---
 
@@ -38,14 +44,14 @@ Human Review & Action    (mark complete · edit times · auto-resolve conflicts)
 
 **Key components:**
 
-| Component | File | Responsibility |
-|---|---|---|
-| Data Models | `pawpal_system.py` | `Owner → Pet → Task` hierarchy; `Priority` enum; `ScheduledTask`; `DailyPlan` |
-| Scheduling Engine | `pawpal_system.py` | Greedy allocation, multi-factor sorting, recurrence logic, conflict detection, weighted urgency scoring |
-| AI Agent | `ai_assistant.py` | Gemini 2.5 Flash with 5 tool declarations; agentic loop (max 10 iterations); automatic model fallback |
-| Guardrails | `logger_config.py` | Input validation (title length, duration bounds, time format, chat message size); dated log files |
-| Web UI | `app.py` | Streamlit interface with 6 interactive sections; color-coded priority views; conflict resolution buttons |
-| Tests | `tests/test_pawpal.py` | 25 pytest cases covering sorting, recurrence, conflict detection, allocation, filtering, and edge cases |
+| Component         | File                   | Responsibility                                                                                           |
+| ----------------- | ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| Data Models       | `pawpal_system.py`     | `Owner → Pet → Task` hierarchy; `Priority` enum; `ScheduledTask`; `DailyPlan`                            |
+| Scheduling Engine | `pawpal_system.py`     | Greedy allocation, multi-factor sorting, recurrence logic, conflict detection, weighted urgency scoring  |
+| AI Agent          | `ai_assistant.py`      | Gemini 2.5 Flash with 5 tool declarations; agentic loop (max 10 iterations); automatic model fallback    |
+| Guardrails        | `logger_config.py`     | Input validation (title length, duration bounds, time format, chat message size); dated log files        |
+| Web UI            | `app.py`               | Streamlit interface with 6 interactive sections; color-coded priority views; conflict resolution buttons |
+| Tests             | `tests/test_pawpal.py` | 25 pytest cases covering sorting, recurrence, conflict detection, allocation, filtering, and edge cases  |
 
 **Mermaid system diagram** — paste into [mermaid.live](https://mermaid.live) to render:
 
@@ -140,9 +146,11 @@ python main.py
 ### Interaction 1 — Generating a daily schedule
 
 **User input (AI Chat):**
+
 > "Generate today's schedule for all my pets starting at 8 AM."
 
 **System actions (agentic loop):**
+
 1. Gemini calls `generate_schedule(start_time="08:00")`
 2. Engine filters tasks by species and due-date recurrence
 3. Tasks are ranked by (pinned time → is_required → priority)
@@ -150,15 +158,18 @@ python main.py
 5. `check_conflicts()` is automatically called as a follow-up
 
 **AI response:**
+
 > Here's today's schedule for Buddy and Luna!
 >
 > **Buddy (dog) — 55 of 60 min used:**
+>
 > - 08:00–08:30 Morning Walk (30 min) — HIGH priority, pinned to 08:00
 > - 08:30–08:40 Breakfast Feeding (10 min) — HIGH priority, required
 > - 08:40–09:10 Medication (15 min) — HIGH priority, required
 > - 09:10–09:25 Teeth Brushing (15 min) — MEDIUM priority
 >
 > **Luna (cat) — 20 of 60 min used:**
+>
 > - 08:00–08:10 Morning Feeding (10 min) — HIGH priority
 > - 08:10–08:20 Litter Box Clean (10 min) — MEDIUM priority
 >
@@ -169,18 +180,22 @@ python main.py
 ### Interaction 2 — Smart task recommendation
 
 **User input (AI Chat):**
+
 > "I have 20 free minutes right now at 2 PM. What's the most important thing I should do?"
 
 **System actions:**
+
 1. Gemini calls `get_task_recommendation(free_minutes=20, current_time="14:00")`
 2. Engine scores every pending, non-future-pinned task across all pets
 3. Composite score = `priority_weight × required_multiplier + recency_penalty + overdue_bonus`
 4. Highest-scoring task that fits in 20 minutes is returned
 
 **AI response:**
+
 > I recommend **Buddy's Weekly Grooming Brush** right now.
 >
 > Here's why it ranks highest:
+>
 > - Priority: HIGH (weight 3)
 > - Required task: ×2 multiplier
 > - Last done 9 days ago — overdue bonus: +2.0, recency penalty: 1.0 (maxed out)
@@ -197,6 +212,7 @@ python main.py
 User adds two tasks for Buddy: "Morning Walk" pinned to `08:00` (30 min) and "Vet Medication" pinned to `08:15` (20 min), then clicks **"Check for Conflicts"**.
 
 **System output:**
+
 ```
 ⚠️ 2 conflict(s) detected before schedule generation:
 
@@ -210,6 +226,7 @@ User clicks **"Auto-Resolve Conflicts"**.
 **System action:** Sweep-line algorithm shifts "Vet Medication" to `08:30`, regenerates the plan.
 
 **System output:**
+
 ```
 ✅ Conflicts resolved. "Vet Medication" rescheduled to 08:30.
 Plan regenerated successfully — 0 conflicts detected.
@@ -298,24 +315,24 @@ tests/test_pawpal.py::test_edge_case_species_filtering_multi_species_task       
 
 ### Coverage breakdown
 
-| Category | Tests | Reliability signal |
-|---|---|---|
-| Task lifecycle | 2 | Status transitions are deterministic — 100% pass |
-| Recurrence logic | 3 | Boundary math (6-day vs. 7-day) verified explicitly |
-| Conflict detection | 3 | Same-pet, cross-pet, and adjacent-interval (no false positive) all correct |
-| Core functionality | 6 | Owner/pet management, pre/post-schedule warnings, schedule generation |
-| Edge cases | 11 | Zero budget, exact-fit, 20+ task sort, midnight/23:59 parsing, invalid mappings, all-None filters, multi-pet overflow, species filtering |
+| Category           | Tests | Reliability signal                                                                                                                       |
+| ------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Task lifecycle     | 2     | Status transitions are deterministic — 100% pass                                                                                         |
+| Recurrence logic   | 3     | Boundary math (6-day vs. 7-day) verified explicitly                                                                                      |
+| Conflict detection | 3     | Same-pet, cross-pet, and adjacent-interval (no false positive) all correct                                                               |
+| Core functionality | 6     | Owner/pet management, pre/post-schedule warnings, schedule generation                                                                    |
+| Edge cases         | 11    | Zero budget, exact-fit, 20+ task sort, midnight/23:59 parsing, invalid mappings, all-None filters, multi-pet overflow, species filtering |
 
 ### Guardrails and error handling (runtime reliability)
 
 Beyond pytest, `logger_config.py` enforces four input guardrails that fire before any scheduling logic runs:
 
-| Guardrail | Rule | Behavior on violation |
-|---|---|---|
-| `validate_task_title` | Non-empty, ≤ 120 chars | Raises `GuardrailError` with exact char count |
-| `validate_task_duration` | 1–480 minutes | Raises `GuardrailError` with allowed range |
-| `validate_time_hint` | `HH:MM` format, `00:00`–`23:59` | Raises `GuardrailError` with specific reason |
-| `validate_chat_message` | Non-empty, ≤ 2000 chars | Raises `GuardrailError` before hitting the AI API |
+| Guardrail                | Rule                            | Behavior on violation                             |
+| ------------------------ | ------------------------------- | ------------------------------------------------- |
+| `validate_task_title`    | Non-empty, ≤ 120 chars          | Raises `GuardrailError` with exact char count     |
+| `validate_task_duration` | 1–480 minutes                   | Raises `GuardrailError` with allowed range        |
+| `validate_time_hint`     | `HH:MM` format, `00:00`–`23:59` | Raises `GuardrailError` with specific reason      |
+| `validate_chat_message`  | Non-empty, ≤ 2000 chars         | Raises `GuardrailError` before hitting the AI API |
 
 All actions (tool calls, schedule generation, API errors, quota exhaustion) are written to `logs/pawpal_YYYY-MM-DD.log` at INFO level. The AI agentic loop is capped at 10 iterations with an explicit warning log if the cap is hit, preventing runaway API costs.
 
@@ -323,11 +340,11 @@ All actions (tool calls, schedule generation, API errors, quota exhaustion) are 
 
 The `score_task()` function returns a float score for every pending task. This score is surfaced directly to the user as a numeric urgency rating in the recommendation output, making the AI's decision transparent and auditable:
 
-| Task scenario | Expected score | Verified |
-|---|---|---|
-| HIGH priority + required + overdue 9 days | `3 × 2 + 1.0 + 2.0 = 9.0` | Manually traced before merge |
-| LOW priority + not required + completed today | `1 × 1 + 0.0 + 0.0 = 1.0` | Confirmed overdue task outranks fresh task |
-| MEDIUM priority + required + 3 days old | `2 × 2 + 0.43 + 0.0 = 4.43` | Linear ramp confirmed continuous, not binary |
+| Task scenario                                 | Expected score              | Verified                                     |
+| --------------------------------------------- | --------------------------- | -------------------------------------------- |
+| HIGH priority + required + overdue 9 days     | `3 × 2 + 1.0 + 2.0 = 9.0`   | Manually traced before merge                 |
+| LOW priority + not required + completed today | `1 × 1 + 0.0 + 0.0 = 1.0`   | Confirmed overdue task outranks fresh task   |
+| MEDIUM priority + required + 3 days old       | `2 × 2 + 0.43 + 0.0 = 4.43` | Linear ramp confirmed continuous, not binary |
 
 ### Bugs caught by tests (before shipping)
 
@@ -365,12 +382,12 @@ Three real bugs were found and fixed by the test suite:
 
 PawPal+ is low-stakes by design — the worst outcome of a bad schedule is a missed walk, not harm to a person. That said, a few misuse vectors are worth naming:
 
-| Misuse scenario | Current prevention |
-|---|---|
-| **Flooding the AI with junk input to exhaust API quota** | `validate_chat_message` caps messages at 2,000 characters; the agentic loop is capped at 10 iterations; quota exhaustion is caught and returns a user-facing message instead of retrying blindly |
-| **Storing sensitive personal data** (owner names, routines, pet medication schedules) in plain text | All data lives in Streamlit's `session_state` — it is ephemeral and never persisted to a database or external service. No data leaves the local machine except the chat message sent to the Gemini API |
-| **API key exposure** | The `.env` file containing the `GEMINI_API_KEY` is listed in `.gitignore` and never committed. The README explicitly instructs users to create this file locally |
-| **Prompt injection via task titles** | Task titles are passed to tool result payloads that Gemini reads. A malicious title like `"Ignore previous instructions and..."` could theoretically influence the model's response. Current mitigation: task titles are validated for length and sent as structured JSON data fields, not embedded in the system prompt directly |
+| Misuse scenario                                                                                     | Current prevention                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Flooding the AI with junk input to exhaust API quota**                                            | `validate_chat_message` caps messages at 2,000 characters; the agentic loop is capped at 10 iterations; quota exhaustion is caught and returns a user-facing message instead of retrying blindly                                                                                                                                  |
+| **Storing sensitive personal data** (owner names, routines, pet medication schedules) in plain text | All data lives in Streamlit's `session_state` — it is ephemeral and never persisted to a database or external service. No data leaves the local machine except the chat message sent to the Gemini API                                                                                                                            |
+| **API key exposure**                                                                                | The `.env` file containing the `GEMINI_API_KEY` is listed in `.gitignore` and never committed. The README explicitly instructs users to create this file locally                                                                                                                                                                  |
+| **Prompt injection via task titles**                                                                | Task titles are passed to tool result payloads that Gemini reads. A malicious title like `"Ignore previous instructions and..."` could theoretically influence the model's response. Current mitigation: task titles are validated for length and sent as structured JSON data fields, not embedded in the system prompt directly |
 
 The most realistic concern is the last one. A more robust mitigation would be to sanitize task title strings before including them in any content Gemini processes, or to add explicit instructions in the system prompt to treat tool result data as untrusted input.
 
@@ -382,7 +399,7 @@ The most realistic concern is the last one. A more robust mitigation would be to
 
 **Tests found bugs I was confident didn't exist.** The off-by-one error in weekly recurrence (`>= 7` vs. `> 6`) was a case where I had mentally verified the logic and still got it wrong. The boundary test (`test_edge_case_weekly_recurrence_boundary_six_days`) caught it immediately. This reinforced that confidence in code and correctness of code are two different things.
 
-**The AI agent's tool selection was more reliable than expected.** I initially worried that Gemini might call `generate_schedule` when asked for a recommendation, or call no tools at all for an ambiguous question. In manual testing across 10+ varied prompts, the model selected the correct tool every time. What was less reliable was the *framing* of the response — sometimes it would repeat tool result data verbatim instead of summarizing it conversationally. This is a prompting quality issue, not a tool-routing failure.
+**The AI agent's tool selection was more reliable than expected.** I initially worried that Gemini might call `generate_schedule` when asked for a recommendation, or call no tools at all for an ambiguous question. In manual testing across 10+ varied prompts, the model selected the correct tool every time. What was less reliable was the _framing_ of the response — sometimes it would repeat tool result data verbatim instead of summarizing it conversationally. This is a prompting quality issue, not a tool-routing failure.
 
 **Guardrails revealed an assumption I hadn't documented.** When testing `validate_task_duration`, I discovered the 480-minute (8-hour) cap was arbitrary — I had added it without a clear rationale. In a real system, this would need to be a configurable parameter, not a hardcoded constant. Finding an undocumented assumption through testing is exactly the kind of thing tests are supposed to surface.
 
@@ -391,10 +408,10 @@ The most realistic concern is the last one. A more robust mitigation would be to
 ### AI collaboration: one helpful suggestion, one flawed one
 
 **Helpful suggestion — the four-signal scoring formula.**
-When I asked the AI to propose an urgency scoring algorithm, it returned three candidates with complexity analysis and integration notes. The suggestion I selected — a composite score with a continuous linear recency ramp (`min(days_elapsed / 7.0, 1.0)`) rather than a binary due/not-due flag — was genuinely better than what I would have designed alone. The linear ramp means urgency increases *gradually* as the care window closes, which is more realistic than a task suddenly jumping from "not urgent" to "urgent" at day 7. That nuance came from the AI framing the problem in terms of user experience, not just algorithm correctness.
+When I asked the AI to propose an urgency scoring algorithm, it returned three candidates with complexity analysis and integration notes. The suggestion I selected — a composite score with a continuous linear recency ramp (`min(days_elapsed / 7.0, 1.0)`) rather than a binary due/not-due flag — was genuinely better than what I would have designed alone. The linear ramp means urgency increases _gradually_ as the care window closes, which is more realistic than a task suddenly jumping from "not urgent" to "urgent" at day 7. That nuance came from the AI framing the problem in terms of user experience, not just algorithm correctness.
 
 **Flawed suggestion — the initial urgency score inversion.**
-When the AI first implemented the scoring formula, it produced a version where a fresh HIGH-priority required task scored `3 × 2 = 6.0` and an overdue LOW-priority task scored `1 × 1 + 2.0 = 3.0` — meaning the freshly-done high-priority task ranked *higher* than the overdue one, which is the opposite of useful. The problem was that the AI applied the required multiplier to the full composite score rather than just the priority weight, and placed the overdue bonus *inside* the required branch rather than as a separate additive signal. I caught this by tracing through two concrete examples manually and comparing the outputs before accepting the code. The fix required restructuring the formula, not just changing a number — and the AI implemented the corrected version correctly once I described the exact expected outputs for those two cases.
+When the AI first implemented the scoring formula, it produced a version where a fresh HIGH-priority required task scored `3 × 2 = 6.0` and an overdue LOW-priority task scored `1 × 1 + 2.0 = 3.0` — meaning the freshly-done high-priority task ranked _higher_ than the overdue one, which is the opposite of useful. The problem was that the AI applied the required multiplier to the full composite score rather than just the priority weight, and placed the overdue bonus _inside_ the required branch rather than as a separate additive signal. I caught this by tracing through two concrete examples manually and comparing the outputs before accepting the code. The fix required restructuring the formula, not just changing a number — and the AI implemented the corrected version correctly once I described the exact expected outputs for those two cases.
 
 ---
 
@@ -416,13 +433,11 @@ applied-ai-system-project/
 
 ## Dependencies
 
-| Package | Purpose |
-|---|---|
-| `streamlit >= 1.30` | Web UI framework |
-| `google-genai >= 1.0.0` | Google Gemini API client |
-| `python-dotenv >= 1.0.0` | `.env` file loading |
-| `pytest >= 7.0` | Test framework |
+| Package                  | Purpose                  |
+| ------------------------ | ------------------------ |
+| `streamlit >= 1.30`      | Web UI framework         |
+| `google-genai >= 1.0.0`  | Google Gemini API client |
+| `python-dotenv >= 1.0.0` | `.env` file loading      |
+| `pytest >= 7.0`          | Test framework           |
 
 ---
-
-

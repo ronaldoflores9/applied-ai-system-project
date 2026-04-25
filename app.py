@@ -560,7 +560,7 @@ if st.session_state.owner:
 
             # Auto-resolve button — lives OUTSIDE generate block so it survives reruns
             if st.button("🔧 Auto-Resolve Conflicts", use_container_width=True):
-                changes = scheduler.resolve_conflicts(owner)
+                changes = scheduler.resolve_conflicts(owner, plans=plans)
                 if changes:
                     for task, old_t, new_t in changes:
                         emoji = _task_emoji(task.title, task.category)
@@ -579,7 +579,7 @@ if st.session_state.owner:
                     st.success(f"✓ Resolved {len(changes)} conflict(s). Schedule rebuilt.")
                     st.rerun()
                 else:
-                    st.info("No pinned-time conflicts to resolve.")
+                    st.info("No conflicts could be resolved automatically.")
         else:
             st.success("✓ No scheduling conflicts detected!")
 

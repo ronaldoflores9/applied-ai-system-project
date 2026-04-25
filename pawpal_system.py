@@ -337,44 +337,60 @@ class Scheduler:
         return warnings
 
     def resolve_conflicts(
-        self, owner: Owner
+        self, owner: Owner, plans: list[DailyPlan] | None = None
     ) -> list[tuple[Task, str, str]]:
-        """Auto-resolve pinned-time conflicts by shifting the later task forward.
+        """Auto-resolve scheduling conflicts by shifting the later task forward.
+
+        When *plans* are supplied the sweep-line uses the actual scheduled
+        windows from the generated plans, so it can fix both pinned-time
+        and unpinned cross-pet conflicts.  Without *plans* only tasks that
+        already have a ``scheduled_time`` hint are considered.
 
         Algorithm (sweep-line):
-        1. Collect every incomplete pinned task across all pets, sorted by
-           their scheduled_time (earliest first).
-        2. Walk through them tracking `wall` — the earliest minute that is
-           free (initially 0, i.e. midnight).
-        3. If a task's pinned start overlaps the current wall time, push its
-           `scheduled_time` forward to `wall` (the next free slot).
-        4. Advance `wall` to the end of the task in either case.
-
-        This guarantees a chain of non-overlapping pinned times while
-        minimising how much each task is shifted.
+        1. Collect tasks sorted by their start time (from plans or from
+           scheduled_time hints).
+        2. Walk through them tracking ``wall`` — the earliest free minute.
+        3. If a task's start overlaps ``wall``, push its ``scheduled_time``
+           forward to ``wall`` and record the change.
+        4. Advance ``wall`` to the end of the task in either case.
 
         Args:
-            owner: Owner whose pets' pinned tasks will be adjusted in-place.
+            owner: Owner whose pets' tasks will be adjusted in-place.
+            plans: Optional generated plans; when provided, all conflicts
+                   (pinned and unpinned) are resolved using the scheduled
+                   windows.  When omitted, only pinned tasks are considered.
 
         Returns:
             A list of (task, old_time, new_time) triples for every task whose
             scheduled_time was changed, so the UI can display a diff.
         """
-        pinned: list[tuple[Pet, Task]] = [
-            (pet, task)
-            for pet in owner.pets
-            for task in pet.tasks
-            if task.scheduled_time and not task.is_completed
-        ]
-        pinned.sort(key=lambda pt: self._parse_time(pt[1].scheduled_time))
+        if plans is not None:
+            all_items: list[tuple[Task, str]] = sorted(
+                [
+                    (st.task, st.start_time)
+                    for plan in plans
+                    for st in plan.scheduled_tasks
+                ],
+                key=lambda x: self._parse_time(x[1]),
+            )
+        else:
+            all_items = sorted(
+                [
+                    (task, task.scheduled_time)
+                    for pet in owner.pets
+                    for task in pet.tasks
+                    if task.scheduled_time and not task.is_completed
+                ],
+                key=lambda x: self._parse_time(x[1]),
+            )
 
         changes: list[tuple[Task, str, str]] = []
         wall = 0  # minutes since midnight — tracks the next free slot
 
-        for _, task in pinned:
-            start = self._parse_time(task.scheduled_time)
+        for task, current_time in all_items:
+            start = self._parse_time(current_time)
             if start < wall:
-                old_time = task.scheduled_time
+                old_time = task.scheduled_time if task.scheduled_time else current_time
                 task.scheduled_time = self._format_time(wall)
                 changes.append((task, old_time, task.scheduled_time))
                 start = wall
