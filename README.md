@@ -14,7 +14,11 @@
 
 [View the code on GitHub](https://github.com/ronaldoflores9/applied-ai-system-project)
 
-This project shows that I can design and build an AI system that is both useful and explainable. I focus on clear architecture, reliable scheduling logic, and practical guardrails, which means I think beyond just making an AI feature work and toward making it dependable, testable, and easy to understand.
+### What this project says about me as an AI engineer
+
+The above example illustrates how I approach the building of AI models as a product engineer rather than an experimenter, by decoupling the deterministic business rules from the model predictions, adding checks and validations to model predictions, and designing for observability through structured logging and failure modes.
+
+Furthermore, this example highlights how I work on making AI models trustworthy by reasoning about them using tools rather than understanding the prompts used internally, ensuring test coverage on critical functionality and edge cases, and providing transparency in the output that explains the rationale behind the recommendation.
 
 ---
 
